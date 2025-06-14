@@ -1,0 +1,13 @@
+{
+  "name": "mltt",
+  "private": true,
+  "version": "0.0.0",
+  "scripts": {
+    "build": "sbt fullLinkJS",
+    "test": "sbt test",
+    "watch": "sbt ~fullLinkJS",
+    "dev": "sbt ~test",
+    "console": "sbt run",
+    "compile:dev": "sbt fastLinkJS"
+  }
+}

@@ -1,0 +1,15 @@
+type Nat;
+type Zero = Nat;
+type Succ = (n: Nat) => Nat;
+
+type Bool;
+type True = Bool;
+type False = Bool;
+type If = (A: Type) => (cond: Bool) => (succ: A) => (alt: A) => A;
+
+type List = (A: Type) => (N: Nat) => Type;
+type Nil = (A: Type) => List(A, Zero);
+type Cons = (A: Type) => (N: Nat) => (head: A) => (tail: List(A, N)) => List(A, Succ(N));
+
+type Eq = (A: Type) => (lhs: A) => (rhs: A) => Type;
+type Refl = (A: Type) => (X: A) => Eq(A, X, X);

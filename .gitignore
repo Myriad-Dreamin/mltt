@@ -1,0 +1,8 @@
+node_modules
+.vscode
+.metals
+.bsp
+.bloop
+dist
+target
+*.log
