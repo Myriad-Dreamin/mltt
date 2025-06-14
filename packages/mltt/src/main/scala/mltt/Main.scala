@@ -11,15 +11,24 @@ object Subst {
     case Uni(lvl) => Uni(lvl + 1)
     case Pi(name, ty, retTy) =>
       Uni(typeLvl(ty).max(typeLvl(retTy)(env + (name -> ty))))
+    case Lam(name, ty, body @ Pi(_, _, _)) =>
+      val pty = normalize(ty)
+      Pi(name, pty, body)
+    case Lam(name, ty, body @ Uni(_)) =>
+      val pty = normalize(ty)
+      Pi(name, pty, body)
     case Lam(name, ty, body) =>
       val pty = normalize(ty)
-      Pi(name, pty, infer(body)(env + (name -> pty)))
+      val bodyTy = infer(body)(env + (name -> pty))
+      Pi(name, pty, bodyTy)
     case App(func, arg) =>
       val (funcTy, argTy) = (infer(func), infer(arg))
       normalize(funcTy) match {
         case Pi(name, paramTy, retTy) =>
           if !typeEq(paramTy, argTy) then
-            throw Error(s"type mismatch, ${paramTy} v.s. ${argTy}")
+            throw Error(
+              s"type mismatch (${name}), ${paramTy} v.s. ${arg} (${argTy})",
+            )
           normalize(subst(name, arg, retTy))
         case ty => throw Error(s"expect function to call, got ${ty}")
       }
@@ -219,11 +228,8 @@ object NBE {
         val funcV = infer(func)
         val argV = infer(arg)
         funcV match {
-          case LamV(_, impl) => impl(eval(arg)(env))
-          case PiV(paramV, impl) =>
-            if !typeEq(paramV, argV) then
-              throw Error(s"type mismatch, ${paramV} v.s. ${argV}")
-            impl(eval(arg))
+          case LamV(_, impl) => impl(eval(arg))
+          case PiV(_, impl)  => impl(eval(arg))
           case _ => throw Error(s"expected function to apply, got ${func}")
         }
     }

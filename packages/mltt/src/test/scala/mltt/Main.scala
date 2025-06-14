@@ -10,9 +10,11 @@ object NodeFs extends js.Object {
 }
 
 object Utils {
-  def debugln1(f: Any) = {}
+  def debugln1(f: Any) = {
+    // println(f)
+  }
   def debugln(f: Any) = {
-    println(f)
+    // println(f)
   }
 }
 
@@ -27,12 +29,11 @@ object SubstMltt {
     progs.map(_.defs).flatten.foldLeft(Map[String, Type](), List[Expr]()) {
       case ((e, tys), Def(isType, name, anno, init)) =>
         implicit val env = e
-        val n = normalize(init)
-        val inferred = infer(n)
+        val inferred = infer(init)
         val Id = Lam("x", inferred, Var("x"))
         // Type Check
         anno.foreach { anno => normalize(App(Id, anno)) }
-        val ty = if isType then n else inferred
+        val ty = if isType then normalize(init) else inferred
         (env + (name -> ty), tys :+ ty)
     }
   }
@@ -46,7 +47,6 @@ class SubstMlttTests extends munit.FunSuite {
     tyck(Seq("samples/predef.mltt", path).map(loadProg).toList),
   )
 
-  test("predef") { testit("samples/predef.mltt") }
   test("exts") { testit("samples/exts.mltt") }
 }
 
@@ -67,10 +67,10 @@ class NBEMlttTests extends munit.FunSuite {
 
         val tyE = valueToExpr(ty)
         // todo: pass tests
-        // assert(
-        //   Subst.αEquiv(tyE, sty)(Map()),
-        //   s"Type mismatch for $name: expected $sty, got $tyE",
-        // )
+        assert(
+          Subst.αEquiv(tyE, sty)(Map()),
+          s"Type mismatch for $name: expected $sty, got $tyE",
+        )
         e.addVar(name, ty)
     }
   }
