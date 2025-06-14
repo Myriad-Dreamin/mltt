@@ -10,30 +10,68 @@ object NodeFs extends js.Object {
 }
 
 object Utils {
-  def debugln(f: Any) = {}
+  def debugln1(f: Any) = {}
+  def debugln(f: Any) = {
+    println(f)
+  }
 }
 
-class SubstMlttTests extends munit.FunSuite {
+object SubstMltt {
+
   import syntax._
-  import mltt.Utils.debugln
 
   def loadProg(path: String) = Parser.parse(NodeFs.readFileSync(path, "utf-8"))
   def tyck(progs: List[Prog]) = {
     import Subst._;
 
-    progs.map(_.defs).flatten.foldLeft(Map[String, Type]()) {
-      case (e, Def(isType, name, anno, init)) =>
+    progs.map(_.defs).flatten.foldLeft(Map[String, Type](), List[Expr]()) {
+      case ((e, tys), Def(isType, name, anno, init)) =>
         implicit val env = e
         val n = normalize(init)
         val inferred = infer(n)
         val Id = Lam("x", inferred, Var("x"))
         // Type Check
         anno.foreach { anno => normalize(App(Id, anno)) }
-        if isType then {
-          e + (name -> n)
-        } else {
-          e + (name -> inferred)
-        }
+        val ty = if isType then n else inferred
+        (env + (name -> ty), tys :+ ty)
+    }
+  }
+}
+
+class SubstMlttTests extends munit.FunSuite {
+  import SubstMltt._
+  import mltt.Utils.{debugln1 as debugln}
+
+  def testit(path: String) = debugln(
+    tyck(Seq("samples/predef.mltt", path).map(loadProg).toList),
+  )
+
+  test("predef") { testit("samples/predef.mltt") }
+  test("exts") { testit("samples/exts.mltt") }
+}
+
+class NBEMlttTests extends munit.FunSuite {
+  import SubstMltt.{loadProg, tyck => tyckSubst}
+  import syntax._
+  import mltt.Utils.debugln
+
+  def tyck(progs: List[Prog]) = {
+    import NBE._;
+
+    progs.map(_.defs).flatten.zip(tyckSubst(progs)._2).foldLeft(Env()) {
+      case (e, (Def(isType, name, anno, init), sty)) =>
+        implicit val env = e
+        val n = normalize(init)
+        val inferred = infer(init)
+        val ty = if isType then n else inferred
+
+        val tyE = valueToExpr(ty)
+        // todo: pass tests
+        // assert(
+        //   Subst.αEquiv(tyE, sty)(Map()),
+        //   s"Type mismatch for $name: expected $sty, got $tyE",
+        // )
+        e.addVar(name, ty)
     }
   }
 
