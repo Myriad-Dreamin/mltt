@@ -1,15 +1,19 @@
 type Nat;
-type Zero = Nat;
-type Succ = (n: Nat) => Nat;
+val Zero: Nat = ???;
+val Succ = (n: Nat) => Nat;
 
 type Bool;
-type True = Bool;
-type False = Bool;
-type If = (A: Type) => (cond: Bool) => (succ: A) => (alt: A) => A;
+val True: Bool = ???;
+val False: Bool = ???;
+val If = (A: Type) => (cond: Bool) => (succ: A) => (alt: A) => A;
 
-type List = (A: Type) => (N: Nat) => Type;
-type Nil = (A: Type) => List(A, Zero);
-type Cons = (A: Type) => (N: Nat) => (head: A) => (tail: List(A, N)) => List(A, Succ(N));
+type List;
+val ListCons = (A: Type) => (N: Nat) => List;
+val Nil = (A: Type) => ListCons(A, Zero);
+val Cons = (A: Type) => (N: Nat) => (head: A) => (tail: ListCons(A, N)) => ListCons(A, Succ(N));
 
-type Eq = (A: Type) => (lhs: A) => (rhs: A) => Type;
-type Refl = (A: Type) => (X: A) => Eq(A, X, X);
+val Eq = (A: Type) => (lhs: A) => (rhs: A) => Type;
+val Refl = (A: Type) => (X: A) => Eq(A, X, X);
+
+val EqV = (A: Type) => (lhs: A) => (rhs: A) => (p: (x: A) => Type) => (pa: p(lhs)) => p(rhs);
+val ReflV = (A: Type) => (X: A) => EqV(A, X, X);

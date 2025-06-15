@@ -9,6 +9,21 @@ val isType = (A: Type) => (x: A) => (f: (x: A) => A) => f(x);
 val funcApply = (A: Type) => (B: (x: A) => Type) => (f: (x: A) => B(x)) => (a: A) => f(a);
 
 
-val natId = (n: Nat) => n;
+val natId: (n: Nat) => Nat = (n: Nat) => n;
+val exprEqTest1 = (n: Nat) => Eq(Nat, natId(n), n);
 val exprEqTest = (n: Nat) => isType(Eq(Nat, natId(n), n), Refl(Nat, n));
 // val funcEqTest = (A: Type) => (Id: (x: A) => A) => isType(Eq(Id, (x: A) => x, funcApply(A, (a: A) => A)), Refl(Id, (x: A) => x));
+
+val EqExt = (B: Type) => (A: (x: B) => B) => (lhs: A) => (rhs: A) => Type;
+// val ReflExt = (A: Type) => (X: A) => Eq(A, X, X);
+// val funcEqTest = (A: Type) => (Id: (x: A) => A) => EqExt(A, Id);
+
+// type Eq2 = (A1: Type) => (A2: Type) => (lhs: (x: A1) => A2) => (rhs: (x: A1) => A2) => Type;
+// // type Refl2 = (A1: Type) => (A2: Type) => (A: (x: A1) => A2) => (X: A) => Eq(A, X, X);
+// // val funcEqTest2 = (A: Type) => (Id: (x: A) => A) => isType(Eq2(A, A, Id, (x: A) => x, funcApply(A, Id)), Refl(A, A, Id, (x: A) => A));
+// val funcEqTest2 = (A: Type) => (Id: (x: A) => A) => Eq2(A, A, (x: A) => x, funcApply(A, (x: A) => A, (x: A) => x));
+
+
+// fn eqExt(r: type) (t: idExt r) (a: t) (b: t) -> type {
+//     (p: (v: t) -> type) -> (pa: p a) -> p b
+// }
