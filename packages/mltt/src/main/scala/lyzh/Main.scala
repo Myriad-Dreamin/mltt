@@ -75,17 +75,6 @@ class Lyzh {
   inline def let(name: String, term: Term)(implicit env: Env): Env =
     env + (name -> Local(term))
 
-  def lift(term: Term)(implicit env: Env): Term = term match {
-    case Var(name)        => Var(name)
-    case Uni              => term
-    case Apply(func, arg) => Apply(lift(func), lift(arg))
-    case Def(name, ty, body, lvl) =>
-      Def(name, lift(ty), lift(body)(let(name, ty)), true)
-  }
-
-  def subst(term: Term)(name: String, into: Term): Term =
-    eval(term)(Map(name -> Local(into)))
-
   def check(expr: Expr, expectedT: Term)(implicit env: Env): Term =
     expr match {
       case Lam(Param(name, paramE), bodyE, lvl) =>
@@ -149,6 +138,8 @@ class Lyzh {
     }
   }
 
+  def subst(term: Term)(name: String, into: Term): Term =
+    eval(term)(Map(name -> Local(into)))
   def eval(term: Term)(implicit env: Env): Term = term match {
     case Uni       => term
     case Var(name) => rename(env.get(name).map(_.evaled).getOrElse(term))
