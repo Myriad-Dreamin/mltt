@@ -4,10 +4,17 @@ import syntax._
 
 class Lyzh {
 
+  /// A well-formed item identified by `Lyzh`.
   sealed abstract class Term;
-  case class Var(name: String) extends Term;
-  case class Apply(func: Term, arg: Term) extends Term;
+  /// Type Universe
   case object Uni extends Term;
+  /// Variable Reference
+  case class Var(name: String) extends Term;
+  /// Function Application
+  case class Apply(func: Term, arg: Term) extends Term;
+  /// Function Type or Lambda
+  /// If `lvl` is true, it is a Pi type (dependent function type),
+  /// otherwise it is a Lam (regular function).
   case class Def(name: String, ty: Term, body: Term, lvl: Boolean)
       extends Term {
     override def toString: String = {
@@ -15,19 +22,27 @@ class Lyzh {
     }
   }
 
-  var globals: Map[String, (Term, Term)] = Map()
+  /// A local environment mapping variable names to terms.
   type Env = Map[String, Term]
 
+  /// The checked global definitions.
+  /// todo: stateful is in my flavor.
+  var globals: Map[String, (Term, Term)] = Map()
+
+  /// Type check let binding, and update the global definitions.
   def tyck(let: Let) = {
+    /// Checks all parameters and adds them to the environment.
     val (envWithParams, params) = let.params.iterator.flatten
       .foldLeft((Map[String, Term](), List[(String, Term)]())) {
         case ((env, params), Param(name, ty)) =>
           val paramTy = ty.map(check(_, Uni)(env)).getOrElse(Uni)
           (env + (name -> paramTy), params :+ (name, paramTy))
       }
-
-    val annoTy = let.ty.map(check(_, Uni)(envWithParams)).get // .getOrElse(Uni)
+    /// Checks the annotation type, which must be in `Uni`.
+    val annoTy = let.ty.map(check(_, Uni)(envWithParams)).get
+    /// Checks the body type with user annotated `annoTy`.
     val bodyTm = check(let.init, annoTy)(envWithParams)
+
     def defCons(isType: Boolean) =
       params.foldRight(if isType then annoTy else bodyTm) {
         case ((name, paramTy), bodyTm) => Def(name, paramTy, bodyTm, isType)
@@ -35,8 +50,10 @@ class Lyzh {
     globals = globals + (let.name -> (defCons(false), defCons(true)))
   }
 
+  /// Makes a new name.
   var freshenCount = 0;
   def freshName(name: String): String = {
+    // todo: fresh counter is stateful, which is not good.
     freshenCount += 1
     if name.endsWith("'") then
       // remove the old freshen count.
@@ -45,13 +62,11 @@ class Lyzh {
     else s"${name}@${freshenCount}'"
   }
 
-  def unresolved(name: String): Nothing = {
-    throw Error(s"unresolved variable ${name}")
-  }
-
+  /// A shortcut to create a new environment with the additional local variable.
   inline def let(name: String, term: Term)(implicit env: Env): Env =
     env + (name -> term)
 
+  /// Checks the expression against the expected type.
   def check(expr: Expr, expectedT: Term)(implicit env: Env): Term =
     expr match {
       case Lam(Param(name, paramE), bodyE, lvl) =>
@@ -73,6 +88,10 @@ class Lyzh {
         valT
     }
 
+  /// Throws undefined variable error.
+  def unresolved(name: String): Nothing =
+    throw Error(s"unresolved variable ${name}")
+  /// Infers the type of the expression.
   def infer(expr: Expr)(implicit env: Env): (Term, Term) = expr match {
     case Name(name) =>
       val localRet = env.get(name).map((Var(name), _))
@@ -95,6 +114,7 @@ class Lyzh {
       }
   }
 
+  /// Unifies two terms, returning true if they are equivalent.
   def unify(lhs: Term, rhs: Term)(implicit env: Env): Boolean =
     (lhs, rhs) match {
       case (u: Var, v: Var) => u == v
@@ -108,15 +128,19 @@ class Lyzh {
       case _ => false
     }
 
+  /// Runs the function application concretely.
   def opApply(func: Term, arg: Term)(implicit env: Env): Term = {
     func match {
       case Def(name, _, body, _) => subst(body)(name, arg)
-      case _                     => Apply(func, arg)
+      /// Keep the function as is if it is not a Def.
+      case _ => Apply(func, arg)
     }
   }
 
+  /// Substitutes a term into another term.
   def subst(term: Term)(name: String, into: Term): Term =
     eval(term)(Map(name -> into))
+  /// Evaluates a term in the given environment.
   def eval(term: Term)(implicit env: Env): Term = term match {
     case Uni                      => term
     case Var(name)                => rename(env.get(name).getOrElse(term))
@@ -124,11 +148,13 @@ class Lyzh {
     case Apply(func, arg) =>
       val (funcVal, argVal) = (eval(func), eval(arg))
       funcVal match {
+        /// Note: we don't run `subst` here, to substitute recursively.
         case Def(name, _, body, _) => eval(body)(let(name, argVal))
         case _                     => Apply(funcVal, argVal)
       }
   }
 
+  /// Renames variables in the term to avoid name collisions.
   def rename(term: Term): Term =
     def go(term: Term)(implicit env: Env): Term = term match {
       case Var(name) => env.get(name).getOrElse(term)
