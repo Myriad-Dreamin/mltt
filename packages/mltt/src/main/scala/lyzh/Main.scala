@@ -11,8 +11,7 @@ class Lyzh {
   case class Def(name: String, ty: Term, body: Term, lvl: Boolean)
       extends Term {
     override def toString: String = {
-      val it = if lvl then "Pi" else "Lam"
-      s"$it[(${name}: ${ty}) => ${body}]"
+      s"${if lvl then "Pi" else "Lam"}[(${name}: ${ty}) => ${body}]"
     }
   }
 
@@ -48,7 +47,6 @@ class Lyzh {
       }
 
     val annoTy = let.ty.map(check(_, Uni)(envWithParams)).get // .getOrElse(Uni)
-    println(s"-- check body ~~ $annoTy")
     val bodyTm = check(let.init, annoTy)(envWithParams)
     def defCons(isType: Boolean) =
       params.foldRight(if isType then annoTy else bodyTm) {
@@ -75,7 +73,6 @@ class Lyzh {
     env.getOrElse(name, unresolved(name)).ty
 
   inline def let(name: String, term: Term)(implicit env: Env): Env =
-    println(s"let ${name} = ${term}")
     env + (name -> Local(term))
 
   def lift(term: Term)(implicit env: Env): Term = term match {
@@ -94,11 +91,9 @@ class Lyzh {
       case Lam(Param(name, paramE), bodyE, lvl) =>
         eval(expectedT) match {
           case Def(name, param, bodyTerm, _) =>
-            println(s"check fn!!!!: $name")
             val bodyTy = subst(bodyTerm)(name, Var(name))
             Def(name, param, check(bodyE, bodyTy)(let(name, param)), lvl)
           case Uni =>
-            println(s"check fn????: $name")
             val (param, paramTy) = paramE.map(infer).getOrElse((Var(name), Uni))
             val body = if lvl then check(bodyE, Uni)(let(name, param)) else ???
             Def(name, param, check(bodyE, Uni)(let(name, param)), lvl)
@@ -106,9 +101,7 @@ class Lyzh {
         }
       case expr =>
         val (valT, tyT) = infer(expr)
-        println(s"elaborator.check: $expr |-| $valT ?= $tyT")
         val (fact, presume) = (eval(tyT), eval(expectedT))
-        println(s"elaborator.check: $expr ||| {$valT} $fact ?= $presume")
         if !unify(fact, presume) then
           throw Error(s"type mismatch, expected ${presume}, got ${fact}")
         valT
@@ -131,9 +124,6 @@ class Lyzh {
           val argTerm = check(arg, param)(let(name, param))
           val retTy = subst(bodyTy)(name, argTerm)
           val retTerm = opApply(funcTerm, argTerm)
-          println(
-            s"applying got {${retTerm}} : RETURN{${retTy}} ... $funcTerm |||| $argTerm",
-          )
           (retTerm, retTy)
         case _ => throw Error(s"expected function to apply, got ${funcTy}")
       }
