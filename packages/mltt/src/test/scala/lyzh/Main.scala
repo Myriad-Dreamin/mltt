@@ -107,7 +107,8 @@ class LyzhMlttTests extends munit.FunSuite {
 
   def tyck(progs: Seq[Prog]) = {
     val checker = Lyzh();
-    progs.map(_.defs).flatten.foldLeft(Map())(checker.tyck)
+    progs.map(_.defs).flatten.foreach(checker.tyck)
+    checker.globals
   }
 
   def testit(paths: String*) = debugln(tyck(paths.map(loadProg)))

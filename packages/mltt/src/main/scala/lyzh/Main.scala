@@ -15,35 +15,15 @@ class Lyzh {
     }
   }
 
-  enum DefTerm {
-    case Local(term: Term)
-    case Global(v: Term, t: Term)
+  var globals: Map[String, (Term, Term)] = Map()
+  type Env = Map[String, Term]
 
-    def value(name: String): Term = this match {
-      case Local(term)  => Var(name)
-      case Global(v, _) => v
-    }
-
-    def evaled: Term = this match {
-      case Local(term)  => term
-      case Global(v, _) => v
-    }
-
-    def ty: Term = this match {
-      case Local(term)  => term
-      case Global(_, t) => t
-    }
-  }
-  import DefTerm._
-
-  type Env = Map[String, DefTerm]
-
-  def tyck(initEnv: Env, let: Let): Env = {
+  def tyck(let: Let) = {
     val (envWithParams, params) = let.params.iterator.flatten
-      .foldLeft((initEnv, List[(String, Term)]())) {
+      .foldLeft((Map[String, Term](), List[(String, Term)]())) {
         case ((env, params), Param(name, ty)) =>
           val paramTy = ty.map(check(_, Uni)(env)).getOrElse(Uni)
-          (env + (name -> Local(paramTy)), params :+ (name, paramTy))
+          (env + (name -> paramTy), params :+ (name, paramTy))
       }
 
     val annoTy = let.ty.map(check(_, Uni)(envWithParams)).get // .getOrElse(Uni)
@@ -52,7 +32,7 @@ class Lyzh {
       params.foldRight(if isType then annoTy else bodyTm) {
         case ((name, paramTy), bodyTm) => Def(name, paramTy, bodyTm, isType)
       }
-    initEnv + (let.name -> Global(defCons(false), defCons(true)))
+    globals = globals + (let.name -> (defCons(false), defCons(true)))
   }
 
   var freshenCount = 0;
@@ -69,11 +49,8 @@ class Lyzh {
     throw Error(s"unresolved variable ${name}")
   }
 
-  def resolve(name: String)(implicit env: Env) =
-    env.getOrElse(name, unresolved(name)).ty
-
   inline def let(name: String, term: Term)(implicit env: Env): Env =
-    env + (name -> Local(term))
+    env + (name -> term)
 
   def check(expr: Expr, expectedT: Term)(implicit env: Env): Term =
     expr match {
@@ -98,8 +75,8 @@ class Lyzh {
 
   def infer(expr: Expr)(implicit env: Env): (Term, Term) = expr match {
     case Name(name) =>
-      val item = env.getOrElse(name, unresolved(name))
-      (item.value(name), item.ty)
+      val localRet = env.get(name).map((Var(name), _))
+      localRet.getOrElse(globals.getOrElse(name, unresolved(name)))
     case UniE(_) => (Uni, Uni)
     case Lam(Param(name, paramE), bodyE, lvl) =>
       val param = paramE.map(check(_, Uni)).getOrElse(Uni)
@@ -139,10 +116,10 @@ class Lyzh {
   }
 
   def subst(term: Term)(name: String, into: Term): Term =
-    eval(term)(Map(name -> Local(into)))
+    eval(term)(Map(name -> into))
   def eval(term: Term)(implicit env: Env): Term = term match {
-    case Uni       => term
-    case Var(name) => rename(env.get(name).map(_.evaled).getOrElse(term))
+    case Uni                      => term
+    case Var(name)                => rename(env.get(name).getOrElse(term))
     case Def(name, ty, body, lvl) => Def(name, eval(ty), eval(body), lvl)
     case Apply(func, arg) =>
       val (funcVal, argVal) = (eval(func), eval(arg))
@@ -154,7 +131,7 @@ class Lyzh {
 
   def rename(term: Term): Term =
     def go(term: Term)(implicit env: Env): Term = term match {
-      case Var(name) => env.get(name).map(_.evaled).getOrElse(term)
+      case Var(name) => env.get(name).getOrElse(term)
       case Uni       => term
       case Def(name, ty, body, lvl) =>
         val newName = freshName(name)
