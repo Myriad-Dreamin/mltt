@@ -1,0 +1,188 @@
+package lyzh
+
+import syntax._
+
+class Lyzh {
+
+  sealed abstract class Term;
+  case class Var(name: String) extends Term;
+  case class Apply(func: Term, arg: Term) extends Term;
+  case object Uni extends Term;
+  case class Def(name: String, ty: Term, body: Term, lvl: Boolean)
+      extends Term {
+    override def toString: String = {
+      val it = if lvl then "Pi" else "Lam"
+      s"$it[(${name}: ${ty}) => ${body}]"
+    }
+  }
+
+  enum DefTerm {
+    case Local(term: Term)
+    case Global(v: Term, t: Term)
+
+    def value(name: String): Term = this match {
+      case Local(term)  => Var(name)
+      case Global(v, _) => v
+    }
+
+    def evaled: Term = this match {
+      case Local(term)  => term
+      case Global(v, _) => v
+    }
+
+    def ty: Term = this match {
+      case Local(term)  => term
+      case Global(_, t) => t
+    }
+  }
+  import DefTerm._
+
+  type Env = Map[String, DefTerm]
+
+  def tyck(initEnv: Env, let: Let): Env = {
+    val (envWithParams, params) = let.params.iterator.flatten
+      .foldLeft((initEnv, List[(String, Term)]())) {
+        case ((env, params), Param(name, ty)) =>
+          val paramTy = ty.map(check(_, Uni)(env)).getOrElse(Uni)
+          (env + (name -> Local(paramTy)), params :+ (name, paramTy))
+      }
+
+    val annoTy = let.ty.map(check(_, Uni)(envWithParams)).get // .getOrElse(Uni)
+    println(s"-- check body ~~ $annoTy")
+    val bodyTm = check(let.init, annoTy)(envWithParams)
+    def defCons(isType: Boolean) =
+      params.foldRight(if isType then annoTy else bodyTm) {
+        case ((name, paramTy), bodyTm) => Def(name, paramTy, bodyTm, isType)
+      }
+    initEnv + (let.name -> Global(defCons(false), defCons(true)))
+  }
+
+  var freshenCount = 0;
+  def freshName(name: String): String = {
+    freshenCount += 1
+    if name.endsWith("'") then
+      // remove the old freshen count.
+      val primIdx = name.dropRight(1).lastIndexOf('@')
+      s"${name.take(primIdx)}@${freshenCount}'"
+    else s"${name}@${freshenCount}'"
+  }
+
+  def unresolved(name: String): Nothing = {
+    throw Error(s"unresolved variable ${name}")
+  }
+
+  def resolve(name: String)(implicit env: Env) =
+    env.getOrElse(name, unresolved(name)).ty
+
+  inline def let(name: String, term: Term)(implicit env: Env): Env =
+    println(s"let ${name} = ${term}")
+    env + (name -> Local(term))
+
+  def lift(term: Term)(implicit env: Env): Term = term match {
+    case Var(name)        => Var(name)
+    case Uni              => term
+    case Apply(func, arg) => Apply(lift(func), lift(arg))
+    case Def(name, ty, body, lvl) =>
+      Def(name, lift(ty), lift(body)(let(name, ty)), true)
+  }
+
+  def subst(term: Term)(name: String, into: Term): Term =
+    eval(term)(Map(name -> Local(into)))
+
+  def check(expr: Expr, expectedT: Term)(implicit env: Env): Term =
+    expr match {
+      case Lam(Param(name, paramE), bodyE, lvl) =>
+        eval(expectedT) match {
+          case Def(name, param, bodyTerm, _) =>
+            println(s"check fn!!!!: $name")
+            val bodyTy = subst(bodyTerm)(name, Var(name))
+            Def(name, param, check(bodyE, bodyTy)(let(name, param)), lvl)
+          case Uni =>
+            println(s"check fn????: $name")
+            val (param, paramTy) = paramE.map(infer).getOrElse((Var(name), Uni))
+            val body = if lvl then check(bodyE, Uni)(let(name, param)) else ???
+            Def(name, param, check(bodyE, Uni)(let(name, param)), lvl)
+          case ty => throw Error(s"expected function type, got ${ty}")
+        }
+      case expr =>
+        val (valT, tyT) = infer(expr)
+        println(s"elaborator.check: $expr |-| $valT ?= $tyT")
+        val (fact, presume) = (eval(tyT), eval(expectedT))
+        println(s"elaborator.check: $expr ||| {$valT} $fact ?= $presume")
+        if !unify(fact, presume) then
+          throw Error(s"type mismatch, expected ${presume}, got ${fact}")
+        valT
+    }
+
+  def infer(expr: Expr)(implicit env: Env): (Term, Term) = expr match {
+    case Name(name) =>
+      val item = env.getOrElse(name, unresolved(name))
+      (item.value(name), item.ty)
+    case UniE(_) => (Uni, Uni)
+    case Lam(Param(name, paramE), bodyE, lvl) =>
+      val param = paramE.map(check(_, Uni)).getOrElse(Uni)
+      val bodyTy = check(bodyE, Uni)(let(name, param))
+      val ty = if lvl then Uni else Def(name, param, bodyTy, true)
+      (Def(name, param, bodyTy, lvl), ty)
+    case App(func, arg) =>
+      val (funcTerm, funcTy) = infer(func)(env)
+      funcTy match {
+        case Def(name, param, bodyTy, lvl) =>
+          val argTerm = check(arg, param)(let(name, param))
+          val retTy = subst(bodyTy)(name, argTerm)
+          val retTerm = opApply(funcTerm, argTerm)
+          println(
+            s"applying got {${retTerm}} : RETURN{${retTy}} ... $funcTerm |||| $argTerm",
+          )
+          (retTerm, retTy)
+        case _ => throw Error(s"expected function to apply, got ${funcTy}")
+      }
+  }
+
+  def unify(lhs: Term, rhs: Term)(implicit env: Env): Boolean =
+    (lhs, rhs) match {
+      case (u: Var, v: Var) => u == v
+      case (Uni, Uni)       => true
+      case (Apply(func1, arg1), Apply(func2, arg2)) =>
+        unify(func1, func2) && unify(arg1, arg2)
+      case (Def(nameL, tyL, bodyL, ll), Def(nameR, tyR, bodyR, lr))
+          if ll == lr =>
+        // todo: check ty
+        unify(bodyL, subst(bodyR)(nameR, Var(nameL)))
+      case _ => false
+    }
+
+  def opApply(func: Term, arg: Term)(implicit env: Env): Term = {
+    func match {
+      case Def(name, _, body, _) => subst(body)(name, arg)
+      case _                     => Apply(func, arg)
+    }
+  }
+
+  def eval(term: Term)(implicit env: Env): Term = term match {
+    case Uni       => term
+    case Var(name) => rename(env.get(name).map(_.evaled).getOrElse(term))
+    case Def(name, ty, body, lvl) => Def(name, eval(ty), eval(body), lvl)
+    case Apply(func, arg) =>
+      val (funcVal, argVal) = (eval(func), eval(arg))
+      funcVal match {
+        case Def(name, _, body, _) => eval(body)(let(name, argVal))
+        case _                     => Apply(funcVal, argVal)
+      }
+  }
+
+  def rename(term: Term): Term =
+    def go(term: Term)(implicit env: Env): Term = term match {
+      case Var(name) => env.get(name).map(_.evaled).getOrElse(term)
+      case Uni       => term
+      case Def(name, ty, body, lvl) =>
+        val newName = freshName(name)
+        val renameEnv = let(name, Var(newName))
+        Def(newName, go(ty)(renameEnv), go(body)(renameEnv), lvl)
+      case Apply(func, arg) =>
+        Apply(go(func), go(arg))
+    }
+    go(term)(Map())
+}
+
+type Value = scala.Nothing;

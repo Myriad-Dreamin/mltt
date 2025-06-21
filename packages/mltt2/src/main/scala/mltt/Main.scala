@@ -1,7 +1,6 @@
 package mltt
 
 import syntax._
-import syntax.{App, Expr, Ext, Lam, Let, Name, Todo, UniE}
 
 // object Subst {
 //   type Env = Map[String, Expr]

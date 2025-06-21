@@ -1,0 +1,14 @@
+def eq(T: Type)(a: T)(b: T): Type = 
+    (P: (v: T) -> Type) -> (pa: P(a)) -> P(b)
+
+def refl(T: Type)(a: T): eq(T, a, a) = p => pa => pa
+
+def sym(T: Type)(a: T)(b: T)(p: eq(T, a, b)): eq(T, b, a) = 
+    p(b => eq(T, b, a), refl(T, a))
+
+def id(T: Type): (a: T) -> T = a => a
+def id2(T: Type): Type = (a: T) -> T
+def tof(T: Type): (v: T) -> Type = v => T
+
+def functionEqualityRight(T: Type)(a: T): T = 
+    refl(id2(T), id(T), tof(id2(T)), id(T), a)
