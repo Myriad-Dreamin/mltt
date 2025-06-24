@@ -13,22 +13,27 @@ sealed abstract class Expr {
   var offset: Int = -1;
   var end: Int = -1;
 }
+
+// id, Type, . => R, . -> R, . (Rs), op L
 final case class Name(name: String) extends Expr
 final case class UniE(level: Option[Int]) extends Expr
 final case class Lam(p: Expr, body: Expr, lvl: Boolean) extends Expr
 final case class App(func: Expr, arg: List[Expr], ct: Boolean) extends Expr
-final case class Param(arg: List[Expr], tl: Boolean, ct: Boolean) extends Expr
-final case class ArgsLit(values: List[Expr], ct: Boolean) extends Expr
-
-final case class Class(name: Name, ps: Pol, body: Expr) extends Expr
-final case class Let(name: Name, ps: Pol, ty: No, body: Expr) extends Expr
-final case class Block(stmts: List[Expr]) extends Expr
-final case class CaseBlock(stmts: List[Case]) extends Expr
-final case class Case(cond: Expr, body: No) extends Expr
 final case class UnOp(op: Str, lhs: Expr) extends Expr
+
+// case L, case L => R, L op R, id: R, L match { Rs }, { Ls }, ( Ls ), { ..(case L)s }
+final case class Case(cond: Expr, body: No) extends Expr
 final case class BinOp(op: Str, lhs: Expr, rhs: Expr) extends Expr
-final case class Match(lhs: Expr, rhs: Expr) extends Expr
 final case class Keyed(lhs: Name, rhs: Expr) extends Expr
+final case class Match(lhs: Expr, rhs: Expr) extends Expr
+final case class Block(stmts: List[Expr]) extends Expr
+final case class Param(arg: List[Expr], tl: Boolean, ct: Boolean) extends Expr
+final case class CaseBlock(stmts: List[Case]) extends Expr
+
+// def name params: ty body
+final case class Let(name: Name, ps: Pol, ty: No, body: Expr) extends Expr
+// class name params  body
+final case class Class(name: Name, ps: Pol, body: Expr) extends Expr
 
 type Type = Expr
 
