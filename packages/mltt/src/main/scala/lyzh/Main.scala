@@ -168,5 +168,3 @@ class Lyzh {
     }
     go(term)(Map())
 }
-
-type Value = scala.Nothing;

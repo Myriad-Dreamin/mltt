@@ -28,15 +28,15 @@ object Parser {
   def letDef[$: P](k: => P[Unit], p: => P[Option[List[Param]]]): P[Let] =
     P(kw(k) ~/ id ~ p ~ (":" ~/ term).? ~ "=" ~/ term).map(Let.apply)
 
-  def term[$: P]: P[Expr] = P(uniTerm | lamTerm | appTerm | varTerm)
+  def term[$: P]: P[Expr] = P(uniTerm | lamTerm | appTerm | name)
   def uniTerm[$: P] = P(kw("Type")).map(_ => UniE(None))
   def lamTerm[$: P] = P(lamParam ~ ("=>" | "->").! ~/ term).map {
     case (p, arrow, body) => Lam(p, body, arrow == "->")
   }
   def appTerm[$: P] =
-    P(varTerm ~ ("(" ~/ term.rep(sep = ",") ~ ",".? ~ ")").rep)
+    P(name ~ ("(" ~/ term.rep(sep = ",") ~ ",".? ~ ")").rep)
       .map { case (func, args) => args.flatten.foldLeft(func)(App.apply) }
-  def varTerm[$: P] = P(id).map(Name.apply)
+  def name[$: P] = P(id).map(Name.apply)
 
   def param[$: P] = P("(" ~/ id ~ (":" ~/ term).? ~ ")").map(Param.apply)
   def lamParam[$: P] = param | id.map(name => Param(name, None))
