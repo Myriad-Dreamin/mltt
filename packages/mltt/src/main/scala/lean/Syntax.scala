@@ -30,10 +30,10 @@ final case class Block(stmts: List[Expr]) extends Expr
 final case class Param(arg: List[Expr], tl: Boolean, ct: Boolean) extends Expr
 final case class CaseBlock(stmts: List[Case]) extends Expr
 
-// def name params: ty body
-final case class Let(name: Name, ps: Pol, ty: No, body: Expr) extends Expr
-// class name params  body
-final case class Class(name: Name, ps: Pol, body: Expr) extends Expr
+// def.! id params: ty body
+final case class Let(k: Str, id: Name, ps: Pol, ty: No, body: Expr) extends Expr
+// class id params     body
+final case class Class(id: Name, ps: Pol, body: Expr) extends Expr
 
 type Type = Expr
 
@@ -54,7 +54,7 @@ object Parser {
   def valDef[$: P] = letDef("val" | "var" | "type", "".map(_ => None))
   def defDef[$: P] = letDef("def", params.?)
   def letDef[$: P](k: => P[Unit], p: => P[Option[List[Param]]]): P[Let] =
-    P(kw(k) ~/ name ~ p ~ (":" ~/ term).? ~ body).map(Let.apply).m
+    P(kw(k).! ~/ name ~ p ~ (":" ~/ term).? ~ body).map(Let.apply).m
   def clsDef[$: P] =
     P(kw("class") ~/ name ~ params.? ~ body).map(Class.apply).m
   def casDef[$: P] =
